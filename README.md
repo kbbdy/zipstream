@@ -21,8 +21,8 @@ from zipstream import ZipStream
 zs = ZipStream()
 # add files to zip before streaming
 zs.add_file("example_file_1.txt")
-zs.add_file("example_file_1.txt")
-zs.add_file("example_file_2.jpg")
+zs.add_file("example_file_2.txt")
+zs.add_file("example_file_3.jpg")
 # write result file
 with file("zipout.zip","wb") as fout:
     for f in zs.stream():
@@ -33,14 +33,14 @@ with file("zipout.zip","wb") as fout:
 
 ```python
 from django.http import StreamingHttpResponse
-    
+
 def stream_as_zip(request):
     streamed_data_filename = "my_streamed_zip_file.zip"
     # large chunk size will improve speed, but increase memory usage
     stream = ZipStream(chunksize=32768)
     # filename of first file in ZIP archive will be different than original
     stream.add_file("/tmp/my_mp3_file.mp3", "my.mp3")
-    stream.add_file("/tmp/some_grapth.jpg") 
+    stream.add_file("/tmp/some_grapth.jpg")
     stream.add_file("/tmp/foo")
     # streamed response
     response = StreamingHttpResponse(
