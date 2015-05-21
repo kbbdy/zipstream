@@ -56,6 +56,20 @@ CD_END_TUPLE = namedtuple("cdend",
      "total_entries", "cd_size", "cd_offset", "comment_len"))
 CD_END_MAGIC = b'\x50\x4b\x05\x06'
 
+# zip64 end of central directory record
+CD_END_STRUCT64 = struct.Struct(b"<4sQHHIIQQQQ")
+CD_END_TUPLE64 = namedtuple("cdend64",
+    ("signature", "zip64_eocd_size", "version", "version_ndd",
+        "disk_num", "disk_cdstart", "disk_entries", "total_entries",
+        "cd_size", "cd_offset"))
+CD_END_MAGIC64 = b'\x06\x06\x4b\x50'
+
+# zip64 end of central directory locator
+CD_LOC64_STRUCT = struct.Struct(b"<4sLQL")
+CD_LOC64_TUPLE =  namedtuple("cdfileheader64",
+    ("signature", "disk_cdstart", "offset", "disk_count"))
+CD_LOC64_MAGIC = b'\x07\x06\x4b\x50'
+
 
 
 class ZipStream(object):
@@ -68,9 +82,11 @@ class ZipStream(object):
            None - auto (regardless of files size)
         """
         self.__files = []
+        self.__zip64headers = False
         self.__version = ZIP32_VERSION
-        if zip64:
-          raise NotImplementedError("Zip64 is not supported yet")
+        if zip64==True:
+            self.zip64 = None
+            self.zip64_required()
         else:
             self.zip64 = zip64
         self.chunksize = chunksize
@@ -83,7 +99,13 @@ class ZipStream(object):
         """
         Turn on zip64 mode for archive
         """
-        raise NotImplementedError("Zip64 is not supported yet")
+        if self.zip64:
+            return
+        if self.zip64==False:
+            raise Exception("Zip 64 mode is required to stream files larger than %i bytes" % ZIP32_LIMIT)
+        self.zip64 = True
+        self.__zip64headers = True
+        self.__version = ZIP64_VERSION
 
     def add_file(self, fname, newname=None):
         # date and time of file
@@ -125,6 +147,27 @@ class ZipStream(object):
         head = EXTRA_STRUCT.pack( *head )
         return head + data
 
+    def make_zip64_cdir_extra(self, fsize, compsize, offset):
+        """
+        make zip64 extra field
+        """
+        fields = {"comp_size" : compsize,
+                  "uncomp_size" : fsize,
+                  "offset" : offset }
+        data = CD_EXTRA_64_TUPLE( **fields )
+        data = CD_EXTRA_64_STRUCT.pack( *data )
+        return self.make_extra_field(0x0001, data)
+
+    def make_zip64_local_extra(self, fsize, compsize):
+        """
+        make zip64 extra field
+        """
+        fields = {"comp_size" : compsize,
+                  "uncomp_size" : fsize }
+        data = EXTRA_64_TUPLE( **fields )
+        data = EXTRA_64_STRUCT.pack( *data )
+        return self.make_extra_field(0x0001, data)
+
     def make_local_file_header(self, idx):
         """
         Create file header
@@ -142,9 +185,18 @@ class ZipStream(object):
                    "fname_len" : len(fileinfo['fname']),
                    "extra_len":0,
                    }
+        if self.__zip64headers:
+            # in zip64 file size headers are set to 0xffffffff
+            fields['uncomp_size'] = 0xffffffff
+            fields['comp_size'] = 0xffffffff
+            # additional extra field is added
+            z64extra = self.make_zip64_local_extra(0,0)
+            fields['extra_len'] = len(z64extra)
         head = LF_TUPLE( **fields )
         head = LF_STRUCT.pack( *head )
         head += fileinfo['fname']
+        if self.__zip64headers:
+            head += z64extra
         self.__files[idx]['header'] = head
         return head
 
@@ -157,7 +209,10 @@ class ZipStream(object):
                    "comp_size" : fileinfo['size'],
                    "crc": fileinfo['crc'] }
         descriptor = DD_TUPLE( **fields )
-        descriptor = DD_STRUCT.pack( *descriptor )
+        if self.__zip64headers:
+            descriptor = DD_STRUCT64.pack( *descriptor )
+        else:
+            descriptor = DD_STRUCT.pack( *descriptor )
         if self.__use_ddmagic:
             descriptor = DD_MAGIC + descriptor
         return descriptor
@@ -186,9 +241,23 @@ class ZipStream(object):
                   "attrs_int" :  0,
                   "attrs_ext" : 0,
         }
+        if self.__zip64headers:
+            # in zip64 file size headers and offset are set to 0xffffffff
+            fields['uncomp_size'] = 0xffffffff
+            fields['comp_size'] = 0xffffffff
+            fields['offset'] = 0xffffffff
+            # additional extra field is added
+            z64extra = self.make_zip64_cdir_extra(
+                fileinfo['size'],
+                fileinfo['size'],
+                fileinfo['offset'])
+            fields['extra_len'] = len(z64extra)
         cdfh = CDLF_TUPLE( **fields )
         cdfh = CDLF_STRUCT.pack( *cdfh )
         cdfh += fileinfo['fname']
+        # extra headers
+        if self.__zip64headers:
+            cdfh += z64extra
         return cdfh
 
     def make_cdend(self):
@@ -204,9 +273,45 @@ class ZipStream(object):
                   "cd_offset" : self.__offset,
                   "comment_len" : 0,
                  }
+        if self.__zip64headers:
+            fields['cd_size'] = 0xffff
+            fields['cd_offset'] = 0xffff
         cdend = CD_END_TUPLE( **fields )
         cdend = CD_END_STRUCT.pack( *cdend )
         return cdend
+
+    def make_cdend64(self):
+        """
+        make zip64 end of central directory record
+        """
+        fields = {"signature" : CD_END_MAGIC64,
+                  "zip64_eocd_size" : CD_END_STRUCT64.size - 12, # self size
+                  "version" : self.__version,
+                  "version_ndd" : self.__version,
+                  "disk_num" : 0,
+                  "disk_cdstart" : 0,
+                  "disk_entries" : len(self.__files),
+                  "total_entries" : len(self.__files),
+                  "cd_size" : self.__cdir_size,
+                  "cd_offset" : self.__offset,
+                 }
+        cdend = CD_END_TUPLE64( **fields )
+        cdend = CD_END_STRUCT64.pack( *cdend )
+        return cdend
+
+    def make_eocd64_locator(self, offset):
+        """
+        Zip64 end of central directory locator
+        """
+        fields = {"signature" : CD_LOC64_MAGIC,
+                  "disk_cdstart" : 0,
+                  "offset" : offset,
+                  "disk_count" : 0,
+                 }
+        cdend = CD_LOC64_TUPLE( **fields )
+        cdend = CD_LOC64_STRUCT.pack( *cdend )
+        return cdend
+
 
     # stream single zip file with header and descriptor
     def stream_single_file(self, idx):
@@ -248,12 +353,17 @@ class ZipStream(object):
                 self.__cdir_size += len(chunk)
                 yield(chunk)
             idx += 1
+        # stream zip64 records
+        if self.__zip64headers:
+            eocd64position = self.__offset + self.__cdir_size
+            yield( self.make_cdend64() )
+            yield( self.make_eocd64_locator(eocd64position) )
         # stream end of central directory
         yield( self.make_cdend() )
 
 
 if __name__ == '__main__':
-    zs = ZipStream(chunksize=48)
+    zs = ZipStream(zip64=True, chunksize=48)
     zs.add_file("temp_file_1.txt")
     zs.add_file("temp_file_2.jpg")
     #zs.add_file("temp_file_3.txt")
