@@ -2,11 +2,11 @@
 
 Simple python library for streaming ZIP files which are created dynamically, without using any temporary files.
 
-Files stored in ZIP file are not compressed. It intended to serve easily structured content in convenient way in web applications
+Files stored in ZIP file are not compressed. Its intended to serve easily structured content in convenient way in web applications
 
-- No temporary files, data is stremed directly from files.
-- Small memory usage, straming is relised using yield statement.
-- Archive structure is created on the fly.
+- No temporary files, data is streamed directly from files
+- Small memory usage, straming is realised using yield statement
+- Archive structure is created on the fly
 - Zip32 compatible files
 - Zip64 support is planned in future
 - Independent from python's standard lib implementation
