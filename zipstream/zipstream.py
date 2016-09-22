@@ -250,13 +250,3 @@ class ZipStream(object):
             idx += 1
         # stream end of central directory
         yield( self.make_cdend() )
-
-
-if __name__ == '__main__':
-    zs = ZipStream(chunksize=48)
-    zs.add_file("temp_file_1.txt")
-    zs.add_file("temp_file_2.jpg")
-    #zs.add_file("temp_file_3.txt")
-    with file("zipout.zip","wb") as fo:
-        for f in zs.stream():
-            fo.write(f)

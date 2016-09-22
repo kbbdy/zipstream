@@ -22,7 +22,6 @@ setup(
     url='https://github.com/kbbdy/zipstream',
 
     author='Krzysztof Babendych',
-    #author_email='not_sure',
 
     license='BSD',
 
