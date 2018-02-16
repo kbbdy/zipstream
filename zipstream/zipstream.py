@@ -7,6 +7,12 @@ import os
 import time
 from zlib import crc32 as zip_crc32
 from . import consts
+try:
+    import aiofiles
+    aio_available = True
+except ImportError:
+    aio_available = False
+
 
 __all__ = ("ZipStream", "AioZipStream")
 
@@ -63,13 +69,11 @@ class ZipStream(object):
             self.zip64_required()
         # file properties used in zip
         rec = {'src': data['file'],
-               'size': stats.st_size,  # <- this should't be statted here
                'mod_time': dosdate,
                'mod_date': dostime,
                'crc': 0,  # will be calculated during data streaming
                "offset": 0,  # file header offset in zip file
-               'flags': 0b00001000,  # flag about using data descriptor is always on
-               }
+               'flags': 0b00001000}  # flag about using data descriptor is always on
 
         # file name in archive
         if 'name' not in data:
@@ -109,7 +113,7 @@ class ZipStream(object):
         head = consts.LF_TUPLE(**fields)
         head = consts.LF_STRUCT.pack(*head)
         head += file_struct['fname']
-        file_struct['header'] = head
+        #file_struct['header'] = head
         return head
 
     def make_data_descriptor(self, file_struct):
@@ -146,8 +150,7 @@ class ZipStream(object):
                   "fcomm_len": 0,  # comment length
                   "disk_start": 0,
                   "attrs_int":  0,
-                  "attrs_ext": 0,
-                  }
+                  "attrs_ext": 0}
         cdfh = consts.CDLF_TUPLE(**fields)
         cdfh = consts.CDLF_STRUCT.pack(*cdfh)
         cdfh += file_struct['fname']
@@ -164,28 +167,32 @@ class ZipStream(object):
                   "total_entries": len(self.__files),
                   "cd_size": self.__cdir_size,
                   "cd_offset": self.__offset,
-                  "comment_len": 0,
-                  }
+                  "comment_len": 0}
         cdend = consts.CD_END_TUPLE(**fields)
         cdend = consts.CD_END_STRUCT.pack(*cdend)
         return cdend
 
-    # stream single zip file with header and descriptor
     def stream_single_file(self, file_struct):
+        """
+        stream single zip file with header and descriptor at the end
+        """
         # file header
         yield self.make_local_file_header(file_struct)
         # file content
         crc = None
+        size = 0
         with open(file_struct['src'], "rb") as fh:
             while True:
                 part = fh.read(self.chunksize)
                 if not part:
                     break
                 yield part
+                size += len(part)
                 if crc:
                     crc = zip_crc32(part, crc)
                 else:
                     crc = zip_crc32(part)
+        file_struct['size'] = size
         if not crc:
             crc = 0
         # hack for making CRC unsigned long
@@ -195,12 +202,12 @@ class ZipStream(object):
 
     def stream(self):
         """
-        Stream archive
+        Stream complete archive
         """
         # stream files
         for idx, source in enumerate(self._source_of_files):
             file_struct = self._create_file_struct(source)
-            file_struct['offset'] = self.__offset  # file offset in zip
+            file_struct['offset'] = self.__offset  # file offset in archive
             self.__files.append(file_struct)
             # file data
             for chunk in self.stream_single_file(file_struct):
@@ -217,8 +224,13 @@ class ZipStream(object):
         yield(self.make_cdend())
 
 
-# class AioZipStream(ZipStream):
-#     """
-#     Asynchronous file of ZipStream
-#     """
-#     pass
+class AioZipStream(ZipStream):
+    """
+    Asynchronous file of ZipStream
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AioZipStream, self).__init__(*args, **kwargs)
+        if not aio_available:
+            raise Exception(
+                "aiofiles module is required to stream ZIP files in asynchronous mode")

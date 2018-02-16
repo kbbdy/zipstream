@@ -1,2 +1,2 @@
-from .zipstream import ZipStream
+from .zipstream import ZipStream, AioZipStream
 version = "0.2"
