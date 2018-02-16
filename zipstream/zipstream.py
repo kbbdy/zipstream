@@ -1,3 +1,8 @@
+#
+# ZIP File streaming
+# based on official ZIP File Format Specification version 6.3.4
+# https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+#
 import os
 import time
 from zlib import crc32 as zip_crc32
@@ -7,15 +12,24 @@ __all__ = ("ZipStream", "AioZipStream")
 
 
 class ZipStream(object):
-    """
-    ZIP File streaming
-    based on official ZIP File Format Specification
-    version 6.3.4
-    https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
-    """
 
-    def __init__(self, source, chunksize=1024):
-        self._source_of_files = source
+    def __init__(self, files, chunksize=1024):
+        """
+        files - list of files, or generator returning files
+                each file entry should be represented as dict with
+                parameters:
+                file - full path to file name
+                name - (optional) name of file in zip archive
+                       if not used, filename stripped from 'file' will be used
+
+                not implemented yet:
+                stream - (optional) can be used as replacement for 'file'
+                         entry, will be treated as generator returnig
+                         chunks of data that will be streamed in archive.
+                         If used, then 'name' entry is required.
+        chunksize - default size of data block streamed from files
+        """
+        self._source_of_files = files
         self.__files = []
         self.__version = consts.ZIP32_VERSION
         self.zip64 = False
@@ -33,18 +47,7 @@ class ZipStream(object):
         """
         raise NotImplementedError("Zip64 is not supported yet")
 
-#    def source_files(self):
-#        """
-#        Source of files that wille be streamed
-#        result is dict with fields:
-#        file - full path to source file
-#        name - name of file in zip (if omitted, file field will be uses)
-#        """
-#        for f in self.__files:
-#            yield {'file': f,
-#                   'name': os.path.basename(f)}
-
-    def _prepare_source(self, data):
+    def _create_file_struct(self, data):
         """
         extract info about streamed file and return all processed data
         required in zip archive
@@ -88,61 +91,57 @@ class ZipStream(object):
         head = consts.EXTRA_STRUCT.pack(*head)
         return head + data
 
-    def make_local_file_header(self, idx):
+    def make_local_file_header(self, file_struct):
         """
         Create file header
         """
-        fileinfo = self.__files[idx]
         fields = {"signature": consts.LF_MAGIC,
                   "version": self.__version,
-                  "flags": fileinfo['flags'],
+                  "flags": file_struct['flags'],
                   "compression": 0,
-                  "mod_time": fileinfo['mod_time'],
-                  "mod_date": fileinfo['mod_date'],
+                  "mod_time": file_struct['mod_time'],
+                  "mod_date": file_struct['mod_date'],
                   "crc": 0,
                   "uncomp_size": 0,
                   "comp_size": 0,
-                  "fname_len": len(fileinfo['fname']),
-                  "extra_len": 0,
-                  }
+                  "fname_len": len(file_struct['fname']),
+                  "extra_len": 0}
         head = consts.LF_TUPLE(**fields)
         head = consts.LF_STRUCT.pack(*head)
-        head += fileinfo['fname']
-        self.__files[idx]['header'] = head
+        head += file_struct['fname']
+        file_struct['header'] = head
         return head
 
-    def make_data_descriptor(self, idx):
+    def make_data_descriptor(self, file_struct):
         """
         Create file descriptor.
         """
-        fileinfo = self.__files[idx]
-        fields = {"uncomp_size": fileinfo['size'],
-                  "comp_size": fileinfo['size'],
-                  "crc": fileinfo['crc']}
+        fields = {"uncomp_size": file_struct['size'],
+                  "comp_size": file_struct['size'],
+                  "crc": file_struct['crc']}
         descriptor = consts.DD_TUPLE(**fields)
         descriptor = consts.DD_STRUCT.pack(*descriptor)
         if self.__use_ddmagic:
             descriptor = consts.DD_MAGIC + descriptor
         return descriptor
 
-    def make_cdir_file_header(self, idx):
+    def make_cdir_file_header(self, file_struct):
         """
         Create central directory file header
         """
-        fileinfo = self.__files[idx]
         fields = {"signature": consts.CDFH_MAGIC,
                   "system": 0x03,  # 0x03 - unix
                   "version": self.__version,
                   "version_ndd": self.__version,
-                  "flags": fileinfo['flags'],
+                  "flags": file_struct['flags'],
                   "compression": 0,  # no compression
-                  "mod_time": fileinfo['mod_time'],
-                  "mod_date": fileinfo['mod_date'],
-                  "uncomp_size": fileinfo['size'],
-                  "comp_size": fileinfo['size'],
-                  "offset":  fileinfo['offset'],  # < file header offset
-                  "crc": fileinfo['crc'],
-                  "fname_len": len(fileinfo['fname']),
+                  "mod_time": file_struct['mod_time'],
+                  "mod_date": file_struct['mod_date'],
+                  "uncomp_size": file_struct['size'],
+                  "comp_size": file_struct['size'],
+                  "offset":  file_struct['offset'],  # < file header offset
+                  "crc": file_struct['crc'],
+                  "fname_len": len(file_struct['fname']),
                   "extra_len": 0,
                   "fcomm_len": 0,  # comment length
                   "disk_start": 0,
@@ -151,7 +150,7 @@ class ZipStream(object):
                   }
         cdfh = consts.CDLF_TUPLE(**fields)
         cdfh = consts.CDLF_STRUCT.pack(*cdfh)
-        cdfh += fileinfo['fname']
+        cdfh += file_struct['fname']
         return cdfh
 
     def make_cdend(self):
@@ -172,12 +171,12 @@ class ZipStream(object):
         return cdend
 
     # stream single zip file with header and descriptor
-    def stream_single_file(self, idx):
+    def stream_single_file(self, file_struct):
         # file header
-        yield self.make_local_file_header(idx)
+        yield self.make_local_file_header(file_struct)
         # file content
         crc = None
-        with open(self.__files[idx]['src'], "rb") as fh:
+        with open(file_struct['src'], "rb") as fh:
             while True:
                 part = fh.read(self.chunksize)
                 if not part:
@@ -190,9 +189,9 @@ class ZipStream(object):
         if not crc:
             crc = 0
         # hack for making CRC unsigned long
-        self.__files[idx]['crc'] = crc & 0xffffffff
+        file_struct['crc'] = crc & 0xffffffff
         # file descriptor
-        yield self.make_data_descriptor(idx)
+        yield self.make_data_descriptor(file_struct)
 
     def stream(self):
         """
@@ -200,17 +199,17 @@ class ZipStream(object):
         """
         # stream files
         for idx, source in enumerate(self._source_of_files):
-            file_struct = self._prepare_source(source)
+            file_struct = self._create_file_struct(source)
             file_struct['offset'] = self.__offset  # file offset in zip
             self.__files.append(file_struct)
             # file data
-            for chunk in self.stream_single_file(idx):
+            for chunk in self.stream_single_file(file_struct):
                 self.__offset += len(chunk)
                 yield chunk
 
         # stream central directory entries
         for idx, file_struct in enumerate(self.__files):
-            chunk = self.make_cdir_file_header(idx)
+            chunk = self.make_cdir_file_header(file_struct)
             self.__cdir_size += len(chunk)
             yield(chunk)
 
