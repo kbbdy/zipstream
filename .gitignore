@@ -3,6 +3,8 @@ __pycache__/
 *.py[cod]
 
 .vscode
+*.zip
+examples/zipstream
 
 # C extensions
 *.so
