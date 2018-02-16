@@ -1,5 +1,4 @@
-#!/usr/bin/env python
-#coding: utf-8
+#!/usr/bin/env python3
 from __future__ import unicode_literals, absolute_import
 from unittest import TestCase, main, skip
 import os
@@ -116,3 +115,4 @@ class ZipStreamTestCase(FileUsingTestBase, TestCase):
 
 if __name__ == '__main__':
     main()
+

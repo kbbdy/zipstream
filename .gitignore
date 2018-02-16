@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 
+.vscode
+
 # C extensions
 *.so
 
@@ -42,10 +44,6 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *,cover
-
-# Translations
-*.mo
-*.pot
 
 # Django stuff:
 *.log
