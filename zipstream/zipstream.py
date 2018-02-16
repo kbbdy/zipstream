@@ -7,6 +7,12 @@ __all__ = ("ZipStream", "AioZipStream")
 
 
 class ZipStream(object):
+    """
+    ZIP File streaming
+    based on official ZIP File Format Specification
+    version 6.3.4
+    https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
+    """
 
     def __init__(self, source, chunksize=1024):
         self._source_of_files = source
@@ -14,6 +20,8 @@ class ZipStream(object):
         self.__version = consts.ZIP32_VERSION
         self.zip64 = False
         self.chunksize = chunksize
+        # this flag tuns on signature for data descriptor record.
+        # see section 4.3.9.3 of ZIP File Format Specification
         self.__use_ddmagic = True
         # central directory size and placement
         self.__cdir_size = 0
@@ -144,7 +152,6 @@ class ZipStream(object):
         cdfh = consts.CDLF_TUPLE(**fields)
         cdfh = consts.CDLF_STRUCT.pack(*cdfh)
         cdfh += fileinfo['fname']
-        print(cdfh)
         return cdfh
 
     def make_cdend(self):
