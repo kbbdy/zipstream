@@ -59,31 +59,34 @@ class ZipStream(object):
         required in zip archive
         """
         # date and time of file
-        # TODO: Fix broken date / time
         dt = time.localtime()
-        dosdate = (dt.tm_year - 1980) << 9 | dt.tm_mon << 5 | dt.tm_mday
-        dostime = dt.tm_hour << 11 | dt.tm_min << 5 | (dt.tm_min // 2)
+        dosdate = ((dt[0] - 1980) << 9 | dt[1] << 5 | dt[2]) \
+            & 0xffff
+        dostime = (dt[3] << 11 | dt[4] << 5 | (dt[5] // 2)) \
+            & 0xffff
+
         # check zip32 limit
-        stats = os.stat(data['file'])
-        if stats.st_size > consts.ZIP32_LIMIT:
-            self.zip64_required()
+        # stats = os.stat(data['file'])
+        #  if stats.st_size > consts.ZIP32_LIMIT:
+        #     self.zip64_required()
+
         # file properties used in zip
-        rec = {'src': data['file'],
-               'mod_time': dosdate,
-               'mod_date': dostime,
-               'crc': 0,  # will be calculated during data streaming
-               "offset": 0,  # file header offset in zip file
-               'flags': 0b00001000}  # flag about using data descriptor is always on
+        file_struct = {'src': data['file'],
+                       'mod_time': dostime,
+                       'mod_date': dosdate,
+                       'crc': 0,  # will be calculated during data streaming
+                       "offset": 0,  # file header offset in zip file
+                       'flags': 0b00001000}  # flag about using data descriptor is always on
 
         # file name in archive
         if 'name' not in data:
             data['name'] = os.path.basename(data['file'])
         try:
-            rec['fname'] = data['name'].encode("ascii")
+            file_struct['fname'] = data['name'].encode("ascii")
         except UnicodeError:
-            rec['fname'] = data['name'].encode("utf-8")
-            rec['flags'] |= consts.UTF8_FLAG
-        return rec
+            file_struct['fname'] = data['name'].encode("utf-8")
+            file_struct['flags'] |= consts.UTF8_FLAG
+        return file_struct
 
     def make_extra_field(self, signature, data):
         """
