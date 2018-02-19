@@ -36,16 +36,16 @@ class ZipStream(object):
         chunksize - default size of data block streamed from files
         """
         self._source_of_files = files
-        self.__files = []
-        self.__version = consts.ZIP32_VERSION
+        self._files = []
+        self._version = consts.ZIP32_VERSION
         self.zip64 = False
         self.chunksize = chunksize
         # this flag tuns on signature for data descriptor record.
         # see section 4.3.9.3 of ZIP File Format Specification
         self.__use_ddmagic = True
         # central directory size and placement
-        self.__cdir_size = 0
-        self.__offset = 0
+        self._cdir_size = 0
+        self._offset = 0
 
     def zip64_required(self):
         """
@@ -103,7 +103,7 @@ class ZipStream(object):
         Create file header
         """
         fields = {"signature": consts.LF_MAGIC,
-                  "version": self.__version,
+                  "version": self._version,
                   "flags": file_struct['flags'],
                   "compression": 0,
                   "mod_time": file_struct['mod_time'],
@@ -116,7 +116,6 @@ class ZipStream(object):
         head = consts.LF_TUPLE(**fields)
         head = consts.LF_STRUCT.pack(*head)
         head += file_struct['fname']
-        #file_struct['header'] = head
         return head
 
     def make_data_descriptor(self, file_struct):
@@ -138,8 +137,8 @@ class ZipStream(object):
         """
         fields = {"signature": consts.CDFH_MAGIC,
                   "system": 0x03,  # 0x03 - unix
-                  "version": self.__version,
-                  "version_ndd": self.__version,
+                  "version": self._version,
+                  "version_ndd": self._version,
                   "flags": file_struct['flags'],
                   "compression": 0,  # no compression
                   "mod_time": file_struct['mod_time'],
@@ -166,14 +165,25 @@ class ZipStream(object):
         fields = {"signature": consts.CD_END_MAGIC,
                   "disk_num": 0,
                   "disk_cdstart": 0,
-                  "disk_entries": len(self.__files),
-                  "total_entries": len(self.__files),
-                  "cd_size": self.__cdir_size,
-                  "cd_offset": self.__offset,
+                  "disk_entries": len(self._files),
+                  "total_entries": len(self._files),
+                  "cd_size": self._cdir_size,
+                  "cd_offset": self._offset,
                   "comment_len": 0}
         cdend = consts.CD_END_TUPLE(**fields)
         cdend = consts.CD_END_STRUCT.pack(*cdend)
         return cdend
+
+    def _local_file_generator(self, fp):
+        """
+        Internal generator used to read files in smaller chunks.
+        """
+        with open(fp, "rb") as f:
+            while True:
+                part = f.read(self.chunksize)
+                if not part:
+                    break
+                yield part
 
     def stream_single_file(self, file_struct):
         """
@@ -184,17 +194,13 @@ class ZipStream(object):
         # file content
         crc = None
         size = 0
-        with open(file_struct['src'], "rb") as fh:
-            while True:
-                part = fh.read(self.chunksize)
-                if not part:
-                    break
-                yield part
-                size += len(part)
-                if crc:
-                    crc = zip_crc32(part, crc)
-                else:
-                    crc = zip_crc32(part)
+        for chunk in self._local_file_generator(file_struct['src']):
+            yield chunk
+            size += len(chunk)
+            if crc:
+                crc = zip_crc32(chunk, crc)
+            else:
+                crc = zip_crc32(chunk)
         file_struct['size'] = size
         if not crc:
             crc = 0
@@ -210,17 +216,17 @@ class ZipStream(object):
         # stream files
         for idx, source in enumerate(self._source_of_files):
             file_struct = self._create_file_struct(source)
-            file_struct['offset'] = self.__offset  # file offset in archive
-            self.__files.append(file_struct)
+            file_struct['offset'] = self._offset  # file offset in archive
+            self._files.append(file_struct)
             # file data
             for chunk in self.stream_single_file(file_struct):
-                self.__offset += len(chunk)
+                self._offset += len(chunk)
                 yield chunk
 
         # stream central directory entries
-        for idx, file_struct in enumerate(self.__files):
+        for idx, file_struct in enumerate(self._files):
             chunk = self.make_cdir_file_header(file_struct)
-            self.__cdir_size += len(chunk)
+            self._cdir_size += len(chunk)
             yield chunk
 
         # stream end of central directory
@@ -234,6 +240,58 @@ class AioZipStream(ZipStream):
 
     def __init__(self, *args, **kwargs):
         super(AioZipStream, self).__init__(*args, **kwargs)
-        if not aio_available:
-            raise Exception(
-                "aiofiles module is required to stream ZIP files in asynchronous mode")
+        # if not aio_available:
+        #    raise Exception(
+        #        "aiofiles module is required to stream ZIP files in asynchronous mode")
+
+    async def _local_file_generator(self, fp):
+        async with aiofiles.open(fp, "rb") as fh:
+            while True:
+                part = await fh.read(self.chunksize)
+                if not part:
+                    break
+                yield part
+
+    async def stream_single_file(self, file_struct):
+        """
+        stream single zip file with header and descriptor at the end
+        """
+        # file header
+        yield self.make_local_file_header(file_struct)
+        # file content
+        crc = None
+        size = 0
+        async for chunk in self._local_file_generator(file_struct['src']):
+            yield chunk
+            size += len(chunk)
+            if crc:
+                crc = zip_crc32(chunk, crc)
+            else:
+                crc = zip_crc32(chunk)
+        file_struct['size'] = size
+        if not crc:
+            crc = 0
+        # hack for making CRC unsigned long
+        file_struct['crc'] = crc & 0xffffffff
+        # file descriptor
+        yield self.make_data_descriptor(file_struct)
+
+    async def stream(self):
+        # stream files
+        for idx, source in enumerate(self._source_of_files):
+            file_struct = self._create_file_struct(source)
+            file_struct['offset'] = self._offset  # file offset in archive
+            self._files.append(file_struct)
+            # file data
+            async for chunk in self.stream_single_file(file_struct):
+                self._offset += len(chunk)
+                yield chunk
+
+        # stream central directory entries
+        for idx, file_struct in enumerate(self._files):
+            chunk = self.make_cdir_file_header(file_struct)
+            self._cdir_size += len(chunk)
+            yield chunk
+
+        # stream end of central directory
+        yield self.make_cdend()

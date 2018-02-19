@@ -2,6 +2,7 @@
 import os
 import asyncio
 from zipstream import AioZipStream
+import aiofiles
 
 
 def files_to_stream(dirname):
@@ -13,12 +14,14 @@ def files_to_stream(dirname):
     for f in os.listdir(dirname):
         fp = os.path.join(dirname, f)
         if os.path.isfile(fp):
-            yield fp
+            yield {'file': fp}
 
 
 async def zip_async(dirname):
-    for a, b in files_to_stream(dn):
-        print(b)
+    aioz = AioZipStream(files_to_stream(dn), chunksize=32768)
+    async with aiofiles.open('aio_example.zip', mode='wb') as z:
+        async for chunk in aioz.stream():
+            await z.write(chunk)
 
 
 dn = "/home/moozg/Pulpit/tmp/1/2/34"
