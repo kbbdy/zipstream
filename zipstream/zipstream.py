@@ -221,10 +221,10 @@ class ZipStream(object):
         for idx, file_struct in enumerate(self.__files):
             chunk = self.make_cdir_file_header(file_struct)
             self.__cdir_size += len(chunk)
-            yield(chunk)
+            yield chunk
 
         # stream end of central directory
-        yield(self.make_cdend())
+        yield self.make_cdend()
 
 
 class AioZipStream(ZipStream):

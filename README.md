@@ -17,16 +17,18 @@ Files stored in ZIP file are not compressed. Its intended to serve easily struct
 ### Example of creating zip file
 
 ```python
-from zipstream import ZipStream
-zs = ZipStream()
-# add files to zip before streaming
-zs.add_file("example_file_1.txt")
-zs.add_file("example_file_2.txt")
-zs.add_file("example_file_3.jpg")
+def files_to_stream(dirname):
+    for f in os.listdir(dirname):
+        fp = os.path.join(dirname, f)
+        if os.path.isfile(fp):
+            yield {'file': fp}
+
+zs = ZipStream(files_to_stream("/tmp/my_files_to_zip"))
+
 # write result file
-with file("zipout.zip","wb") as fout:
-    for f in zs.stream():
-        fout.write(f)
+with open("example.zip", "wb") as fout:
+    for data in zs.stream():
+        fout.write(data)
 ```
 
 ### Example of using zipstream as Django view
@@ -36,17 +38,17 @@ from django.http import StreamingHttpResponse
 
 def stream_as_zip(request):
     streamed_data_filename = "my_streamed_zip_file.zip"
+    files = []
+    files.append({'file': '/tmp/some_grapth.jpg'})
+    files.append({'file': '/tmp/foo'})
+    # this file will have different name than original
+    files.append({'file': '/tmp/my_mp3_file.mp3', 'name': 'my.mp3'})
     # large chunk size will improve speed, but increase memory usage
-    stream = ZipStream(chunksize=32768)
-    # filename of first file in ZIP archive will be different than original
-    stream.add_file("/tmp/my_mp3_file.mp3", "my.mp3")
-    stream.add_file("/tmp/some_grapth.jpg")
-    stream.add_file("/tmp/foo")
+    stream = ZipStream(files, chunksize=32768)
     # streamed response
     response = StreamingHttpResponse(
         stream.stream(),
         content_type="application/zip")
-    response['Content-Disposition'] =
-        'attachment; filename="%s"' % streamed_data_filename
+    response['Content-Disposition'] = 'attachment; filename="%s"' % streamed_data_filename
     return response
 ```

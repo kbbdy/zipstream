@@ -19,10 +19,9 @@ def files_to_stream(dirname):
             yield {'file': fp}
 
 
-dn = "/tmp/my_files_to_stream"
-zs = ZipStream(files_to_stream(dn))
+zs = ZipStream(files_to_stream("/home/moozg/Pulpit/tmp/1/2/34"))
 
 # write result file
 with open("example.zip", "wb") as fout:
-    for f in zs.stream():
-        fout.write(f)
+    for data in zs.stream():
+        fout.write(data)
