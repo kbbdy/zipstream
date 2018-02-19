@@ -17,14 +17,20 @@ def files_to_stream(dirname):
             yield {'file': fp}
 
 
-async def zip_async(dirname):
+async def zip_async(zipname, dirname, p):
     aioz = AioZipStream(files_to_stream(dn), chunksize=32768)
-    async with aiofiles.open('aio_example.zip', mode='wb') as z:
+    async with aiofiles.open(zipname, mode='wb') as z:
         async for chunk in aioz.stream():
+            print(p, end='', flush=True)
             await z.write(chunk)
 
 
 dn = "/home/moozg/Pulpit/tmp/1/2/34"
 loop = asyncio.get_event_loop()
-loop.run_until_complete(zip_async(dn))
+loop.run_until_complete(
+    asyncio.gather(zip_async('azip1.zip', dn, '1'),
+                   zip_async('azip2.zip', dn, '2'),
+                   zip_async('azip2.zip', dn, '3'))
+)
 loop.stop()
+print()
