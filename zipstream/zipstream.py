@@ -120,10 +120,13 @@ class ZipBase:
         head += file_struct['fname']
         return head
 
-    def make_data_descriptor(self, file_struct):
+    def make_data_descriptor(self, file_struct, size, crc):
         """
         Create file descriptor.
+        This function also updates size and crc fields of file_struct
         """
+        file_struct['size'] = size  # <- hack for making CRC unsigned long
+        file_struct['crc'] = crc & 0xffffffff
         fields = {"uncomp_size": file_struct['size'],
                   "comp_size": file_struct['size'],
                   "crc": file_struct['crc']}
@@ -223,11 +226,8 @@ class ZipStream(ZipBase):
             yield chunk
             size += len(chunk)
             crc = zip_crc32(chunk, crc)
-        # hack for making CRC unsigned long
-        file_struct['crc'] = crc & 0xffffffff
-        file_struct['size'] = size
         # file descriptor
-        yield self.make_data_descriptor(file_struct)
+        yield self.make_data_descriptor(file_struct, size, crc)
 
     def stream(self):
         """
@@ -276,11 +276,8 @@ class AioZipStream(ZipStream):
             yield chunk
             size += len(chunk)
             crc = zip_crc32(chunk, crc)
-        # hack for making CRC unsigned long
-        file_struct['crc'] = crc & 0xffffffff
-        file_struct['size'] = size
         # file descriptor
-        yield self.make_data_descriptor(file_struct)
+        yield self.make_data_descriptor(file_struct, size, crc)
 
     async def stream(self):
         # stream files

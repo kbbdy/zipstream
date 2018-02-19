@@ -1,36 +1,21 @@
 #!/usr/bin/env python3
-import os
 import asyncio
-from zipstream import AioZipStream
 import aiofiles
+from zipstream import AioZipStream
 
 
-def files_to_stream(dirname):
-    """
-    This simple generator is used to feed
-    zip streamer by files to stream inside
-    of the file
-    """
-    for f in os.listdir(dirname):
-        fp = os.path.join(dirname, f)
-        if os.path.isfile(fp):
-            yield {'file': fp}
-
-
-async def zip_async(zipname, dirname, p):
-    aioz = AioZipStream(files_to_stream(dn), chunksize=32768)
+async def zip_async(zipname, files):
+    aiozip = AioZipStream(files, chunksize=32768)
     async with aiofiles.open(zipname, mode='wb') as z:
-        async for chunk in aioz.stream():
-            print(p, end='', flush=True)
+        async for chunk in aiozip.stream():
             await z.write(chunk)
 
+files = [
+    {'file': '/tmp/files/to/stream/car.jpeg'},
+    {'file': '/tmp/files/to/stream/aaa.mp3',
+     'name': 'music.mp3'},
+]
 
-dn = "/home/moozg/Pulpit/tmp/1/2/34"
 loop = asyncio.get_event_loop()
-loop.run_until_complete(
-    asyncio.gather(zip_async('azip1.zip', dn, '1'),
-                   zip_async('azip2.zip', dn, '2'),
-                   zip_async('azip2.zip', dn, '3'))
-)
+loop.run_until_complete(zip_async('example.zip', files))
 loop.stop()
-print()
