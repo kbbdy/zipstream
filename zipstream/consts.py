@@ -8,6 +8,12 @@ ZIP64_VERSION = 45
 ZIP32_LIMIT = (1 << 31) - 1
 UTF8_FLAG = 0x800   # utf-8 filename encoding flag
 
+# zip compression methods
+COMPRESSION_STORE = 0
+COMPRESSION_DEFLATE = 8
+COMPRESSION_BZIP2 = 12
+COMPRESSION_LZMA = 14
+
 # file header
 LF_STRUCT = struct.Struct(b"<4sHHHHHLLLHH")
 LF_TUPLE = namedtuple("fileheader",

@@ -5,11 +5,56 @@
 #
 import os
 import time
-from zlib import crc32 as zip_crc32
+import zlib
 from . import consts
 
 
 __all__ = ("ZipStream", )
+
+
+class Processor:
+    def __init__(self, file_struct):
+        self.crc = 0
+        self.o_size = 0
+        self.c_size = 0
+        if file_struct['cmethod'] is None:
+            self.process = self._process_through
+            self.tail = self._no_tail
+        elif file_struct['cmethod'] == 'deflate':
+            self.compr = zlib.compressobj(5, method=zlib.DEFLATED)
+            self.process = self._process_deflate
+            self.tail = self._tail_deflate
+
+    # no compression
+    def _process_through(self, chunk):
+        self.o_size += len(chunk)
+        self.c_size = self.o_size
+        self.crc = zlib.crc32(chunk, self.crc)
+        return chunk
+
+    def _no_tail(self):
+        return b''
+
+    # deflate compression
+    def _process_deflate(self, chunk):
+        self.o_size += len(chunk)
+        print(chunk)
+        chunk = self.compr.compress(chunk)
+        self.crc = zlib.crc32(chunk, self.crc)
+        self.c_size += len(chunk)
+        print(chunk)
+        return chunk
+
+    def _tail_deflate(self):
+        chunk = self.compr.flush(zlib.Z_FINISH)
+        self.crc = zlib.crc32(chunk, self.crc)
+        self.c_size += len(chunk)
+        print(chunk)
+        return chunk
+
+    # after processing counters and crc
+    def state(self):
+        return self.crc, self.o_size, self.c_size
 
 
 class ZipBase:
@@ -80,6 +125,14 @@ class ZipBase:
         else:
             raise Exception('No file or stream in sources')
 
+        cmpr = data.get('compression', None)
+        if cmpr not in (None, 'deflate'):
+            raise Exception('Unknown compression method %r' % cmpr)
+        file_struct['cmethod'] = cmpr
+        file_struct['cmpr_id'] = {
+            None: consts.COMPRESSION_STORE,
+            'deflate': consts.COMPRESSION_DEFLATE}[cmpr]
+
         # file name in archive
         if 'name' not in data:
             data['name'] = os.path.basename(data['file'])
@@ -109,7 +162,7 @@ class ZipBase:
         fields = {"signature": consts.LF_MAGIC,
                   "version": self.__version,
                   "flags": file_struct['flags'],
-                  "compression": 0,
+                  "compression": file_struct['cmpr_id'],
                   "mod_time": file_struct['mod_time'],
                   "mod_date": file_struct['mod_date'],
                   "crc": 0,
@@ -122,20 +175,23 @@ class ZipBase:
         head += file_struct['fname']
         return head
 
-    def _make_data_descriptor(self, file_struct, size, crc):
+    def _make_data_descriptor(self, file_struct, crc, org_size, compr_size):
         """
         Create file descriptor.
         This function also updates size and crc fields of file_struct
         """
-        file_struct['size'] = size  # <- hack for making CRC unsigned long
+        # hack for making CRC unsigned long
         file_struct['crc'] = crc & 0xffffffff
+        file_struct['size'] = org_size
+        file_struct['csize'] = compr_size
         fields = {"uncomp_size": file_struct['size'],
-                  "comp_size": file_struct['size'],
+                  "comp_size": file_struct['csize'],
                   "crc": file_struct['crc']}
         descriptor = consts.DD_TUPLE(**fields)
         descriptor = consts.DD_STRUCT.pack(*descriptor)
         if self.__use_ddmagic:
             descriptor = consts.DD_MAGIC + descriptor
+        print(fields)
         return descriptor
 
     def _make_cdir_file_header(self, file_struct):
@@ -147,11 +203,11 @@ class ZipBase:
                   "version": self.__version,
                   "version_ndd": self.__version,
                   "flags": file_struct['flags'],
-                  "compression": 0,  # no compression
+                  "compression": file_struct['cmpr_id'],
                   "mod_time": file_struct['mod_time'],
                   "mod_date": file_struct['mod_date'],
                   "uncomp_size": file_struct['size'],
-                  "comp_size": file_struct['size'],
+                  "comp_size": file_struct['csize'],
                   "offset": file_struct['offset'],  # < file header offset
                   "crc": file_struct['crc'],
                   "fname_len": len(file_struct['fname']),
@@ -230,16 +286,16 @@ class ZipStream(ZipBase):
         """
         stream single zip file with header and descriptor at the end
         """
-        # file header
         yield self._make_local_file_header(file_struct)
-        # file content
-        crc, size = 0, 0
+        pcs = Processor(file_struct)
         for chunk in self.data_generator(file_struct['src'], file_struct['stype']):
+            chunk = pcs.process(chunk)
+            if len(chunk) > 0:
+                yield chunk
+        chunk = pcs.tail()
+        if len(chunk) > 0:
             yield chunk
-            size += len(chunk)
-            crc = zip_crc32(chunk, crc)
-        # file descriptor
-        yield self._make_data_descriptor(file_struct, size, crc)
+        yield self._make_data_descriptor(file_struct, *pcs.state())
 
     def stream(self):
         """

@@ -3,8 +3,7 @@
 # based on official ZIP File Format Specification version 6.3.4
 # https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 #
-from zlib import crc32 as zip_crc32
-from .zipstream import ZipBase
+from .zipstream import ZipBase, Processor
 try:
     import aiofiles
     aio_available = True
@@ -45,16 +44,11 @@ class AioZipStream(ZipBase):
         """
         stream single zip file with header and descriptor at the end
         """
-        # file header
         yield self._make_local_file_header(file_struct)
-        # file content
-        crc, size = 0, 0
+        pcs = Processor(file_struct)
         async for chunk in self.data_generator(file_struct['src'], file_struct['stype']):
-            yield chunk
-            size += len(chunk)
-            crc = zip_crc32(chunk, crc)
-        # file descriptor
-        yield self._make_data_descriptor(file_struct, size, crc)
+            yield pcs.process(chunk)
+        yield self._make_data_descriptor(file_struct, *pcs.state())
 
     async def stream(self):
         # stream files
