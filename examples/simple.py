@@ -2,8 +2,8 @@
 from zipstream import ZipStream
 
 files = [
-    {'file': '/home/moozg/Pulpit/tmp/1/2/34/car.jpeg'},
-    {'file': '/home/moozg/Pulpit/tmp/1/2/34/aaa.mp3',
+    {'file': '/tmp/car.jpeg'},
+    {'file': '/tmp/aaa.mp3',
      'name': 'music.mp3'},
 ]
 
