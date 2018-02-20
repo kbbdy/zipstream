@@ -15,13 +15,12 @@ __all__ = ("ZipStream", )
 class Processor:
     def __init__(self, file_struct):
         self.crc = 0
-        self.o_size = 0
-        self.c_size = 0
+        self.o_size = self.c_size = 0
         if file_struct['cmethod'] is None:
             self.process = self._process_through
             self.tail = self._no_tail
         elif file_struct['cmethod'] == 'deflate':
-            self.compr = zlib.compressobj(5, method=zlib.DEFLATED)
+            self.compr = zlib.compressobj(5, zlib.DEFLATED, -15)
             self.process = self._process_deflate
             self.tail = self._tail_deflate
 
@@ -38,18 +37,14 @@ class Processor:
     # deflate compression
     def _process_deflate(self, chunk):
         self.o_size += len(chunk)
-        print(chunk)
-        chunk = self.compr.compress(chunk)
         self.crc = zlib.crc32(chunk, self.crc)
+        chunk = self.compr.compress(chunk)
         self.c_size += len(chunk)
-        print(chunk)
         return chunk
 
     def _tail_deflate(self):
         chunk = self.compr.flush(zlib.Z_FINISH)
-        self.crc = zlib.crc32(chunk, self.crc)
         self.c_size += len(chunk)
-        print(chunk)
         return chunk
 
     # after processing counters and crc
@@ -84,8 +79,7 @@ class ZipBase:
         # see section 4.3.9.3 of ZIP File Format Specification
         self.__use_ddmagic = True
         # central directory size and placement
-        self.__cdir_size = 0
-        self.__offset = 0
+        self.__cdir_size = self.__offset = 0
 
     def zip64_required(self):
         """
@@ -191,7 +185,6 @@ class ZipBase:
         descriptor = consts.DD_STRUCT.pack(*descriptor)
         if self.__use_ddmagic:
             descriptor = consts.DD_MAGIC + descriptor
-        print(fields)
         return descriptor
 
     def _make_cdir_file_header(self, file_struct):
@@ -219,6 +212,7 @@ class ZipBase:
         cdfh = consts.CDLF_TUPLE(**fields)
         cdfh = consts.CDLF_STRUCT.pack(*cdfh)
         cdfh += file_struct['fname']
+        print(fields)
         return cdfh
 
     def _make_cdend(self):
@@ -263,7 +257,7 @@ class ZipBase:
         Clean all structs after streaming
         """
         self.__files = []
-        self.__cdir_size, self.__offset = 0, 0
+        self.__cdir_size = self.__offset = 0
 
 
 class ZipStream(ZipBase):
