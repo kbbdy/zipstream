@@ -212,7 +212,6 @@ class ZipBase:
         cdfh = consts.CDLF_TUPLE(**fields)
         cdfh = consts.CDLF_STRUCT.pack(*cdfh)
         cdfh += file_struct['fname']
-        print(fields)
         return cdfh
 
     def _make_cdend(self):

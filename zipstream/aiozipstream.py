@@ -3,7 +3,9 @@
 # based on official ZIP File Format Specification version 6.3.4
 # https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 #
+import asyncio
 from .zipstream import ZipBase, Processor
+from concurrent import futures
 try:
     import aiofiles
     aio_available = True
@@ -18,6 +20,23 @@ class AioZipStream(ZipBase):
     """
     Asynchronous version of ZipStream
     """
+
+    def __init__(self, *args, **kwargs):
+        super(AioZipStream, self).__init__(*args, **kwargs)
+
+    def __get_executor(self):
+        # get thread pool executor
+        try:
+            return self.__tpex
+        except AttributeError:
+            self.__tpex = futures.ThreadPoolExecutor(max_workers=1)
+            return self.__tpex
+
+    async def _execute_aio_task(self, task, *args, **kwargs):
+        # run synchronous task in separate thread and await for result
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(self.__get_executor(),
+                                          task, *args, **kwargs)
 
     def _create_file_struct(self, data):
         if 'file' in data:
@@ -47,7 +66,11 @@ class AioZipStream(ZipBase):
         yield self._make_local_file_header(file_struct)
         pcs = Processor(file_struct)
         async for chunk in self.data_generator(file_struct['src'], file_struct['stype']):
-            yield pcs.process(chunk)
+            yield await self._execute_aio_task(pcs.process, chunk)
+        chunk = await self._execute_aio_task(pcs.tail)
+        # chunk = await pcs.aio_tail()
+        if len(chunk) > 0:
+            yield chunk
         yield self._make_data_descriptor(file_struct, *pcs.state())
 
     async def stream(self):

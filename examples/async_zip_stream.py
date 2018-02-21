@@ -30,7 +30,8 @@ files = [
     {'file': '/tmp/car.jpeg'},
     {'file': '/tmp/aaa.mp3', 'name': 'music.mp3'},
     {'stream': generated_content(50),
-     'name': 'random_stuff.txt'}
+     'name': 'random_stuff.txt',
+     'compression': 'deflate'}
 ]
 
 loop = asyncio.get_event_loop()
