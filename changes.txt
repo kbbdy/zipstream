@@ -1,0 +1,9 @@
+0.4
+- added 'deflate' compresion method
+
+0.3
+- added AioZipStream class for asynchronous streaming
+- new examples and readme file
+
+0.2
+- fixed errors

@@ -12,7 +12,7 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='zipstream',
-    version='0.3',
+    version='0.4',
 
     description='Creating zip files on the fly',
     long_description=long_description,
@@ -28,12 +28,10 @@ setup(
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Build Tools',
         'License :: OSI Approved :: BSD License',
-        # 'Programming Language :: Python :: 2',
-        # 'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-        'Programming Language :: Python :: 3.5',
+        'Programming Language :: Python :: 3.6',
     ],
 
     keywords='zip streaming',

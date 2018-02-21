@@ -2,9 +2,8 @@
 
 Simple python library for streaming ZIP files which are created dynamically, without using any temporary files.
 
-Files stored in ZIP file are not compressed, `ZipStream` is intended to easily serve structured multi-file content in web applications.
-
 - No temporary files, data is streamed directly
+- Supported `deflate` compression method
 - Small memory usage, straming is realised using yield statement
 - Archive structure is created on the fly, and all data can be created during stream
 - Files included into archive can be generated on the fly using Python generators
@@ -12,7 +11,6 @@ Files stored in ZIP file are not compressed, `ZipStream` is intended to easily s
 - Zip32 format compatible files
 - Independent from python's standard ZipFile implementation
 - Almost no dependencies: only `aiofiles` in some circumstances (see AioZipStream section for details)
-- Adding compression is planned
 - Zip64 support is also planned in future (far future, because I never hitted 4GB file size limit ;-) )
 
 ### Required Python version:
@@ -34,7 +32,10 @@ files = [
          {'file':'/tmp/file.dat'},
 
          # same file as previous under own name: `completly_different.foo`
-         {'file':/tmp/file.dat', 'name':'completly_different.foo'}
+         # and will be compressed using `deflate` compression method
+         {'file':'/tmp/file.dat',
+          'name':'completly_different.foo',
+          'compression':'deflate'}
         ]
 ```
 
@@ -79,7 +80,8 @@ def files_to_stream_with_foo_in_name(dirname):
                    'name': "foo_" + os.path.basename(fp)}
     # and our generator too
     yield {'stream': source_of_bytes(),
-           'name': 'my_data.bin'}
+           'name': 'my_data.bin',
+           'compression': 'deflate'}
 
 zs = ZipStream(files_to_stream_with_foo_in_name('\tmp\some-files'))
 ```
