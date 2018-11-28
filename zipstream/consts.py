@@ -37,7 +37,7 @@ DD_STRUCT = struct.Struct(b"<LLL")
 DD_STRUCT64 = struct.Struct(b"<LQQ")
 DD_TUPLE = namedtuple("filecrc",
                       ("crc", "comp_size", "uncomp_size"))
-DD_MAGIC = b'\x08\x07\x4b\x50'
+DD_MAGIC = b'\x50\x4b\x07\x08'
 
 
 # central directory file header
