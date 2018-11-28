@@ -5,6 +5,7 @@
 #
 import os
 import time
+import urllib
 import zlib
 from . import consts
 
@@ -113,6 +114,9 @@ class ZipBase:
         if 'file' in data:
             file_struct['src'] = data['file']
             file_struct['stype'] = 'f'
+        elif 'url' in data:
+            file_struct['src'] = data['url']
+            file_struct['stype'] = 'u'
         elif 'stream' in data:
             file_struct['src'] = data['stream']
             file_struct['stype'] = 's'
@@ -268,6 +272,14 @@ class ZipStream(ZipBase):
             return
         if src_type == 'f':
             with open(src, "rb") as fh:
+                while True:
+                    part = fh.read(self.chunksize)
+                    if not part:
+                        break
+                    yield part
+            return
+        if src_type == 'u':
+            with urllib.request.urlopen(src) as fh:
                 while True:
                     part = fh.read(self.chunksize)
                     if not part:
