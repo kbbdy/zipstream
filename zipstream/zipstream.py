@@ -54,7 +54,7 @@ class Processor:
 
 class ZipBase:
 
-    def __init__(self, files, chunksize=1024):
+    def __init__(self, files=[], chunksize=1024):
         """
         files - list of files, or generator returning files
                 each file entry should be represented as dict with
