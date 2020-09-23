@@ -62,8 +62,6 @@ class ZipBase:
                 file - full path to file name
                 name - (optional) name of file in zip archive
                        if not used, filename stripped from 'file' will be used
-
-                not implemented yet:
                 stream - (optional) can be used as replacement for 'file'
                          entry, will be treated as generator returnig
                          chunks of data that will be streamed in archive.

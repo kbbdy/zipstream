@@ -16,7 +16,7 @@ async def generated_content(size):
         for n in range(random.randint(20, 200)):
             t += random.choice(chars)
         yield bytes(t, 'ascii')
-        asyncio.sleep(0)
+        await asyncio.sleep(0)
 
 
 async def zip_async(zipname, files):
@@ -27,8 +27,8 @@ async def zip_async(zipname, files):
             await z.write(chunk)
 
 files = [
-    {'file': '/tmp/car.jpeg'},
-    {'file': '/tmp/aaa.mp3', 'name': 'music.mp3'},
+    {'file': '/tmp/z/car.jpeg'},
+    {'file': '/tmp/z/aaa.mp3', 'name': 'music.mp3'},
     {'stream': generated_content(50),
      'name': 'random_stuff.txt',
      'compression': 'deflate'}

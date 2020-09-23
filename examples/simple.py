@@ -2,11 +2,11 @@
 from zipstream import ZipStream
 
 files = [
-    {'stream': [b'qwoeui youasd\n', b'yfoasudyf oiausdy foiuasdy\n', b'foiuasdy foiuasdy foa\n'],
+    {'stream': [b'this\n', b'is\n', b'stream\n', b'of\n',b'data\n'],
      'name': 'a.txt',
      'compression':'deflate'},
-    {'file': '/tmp/car.jpeg'},
-    {'file': '/tmp/aaa.mp3',
+    {'file': '/tmp/z/car.jpeg'},
+    {'file': '/tmp/z/aaa.mp3',
      'name': 'music.mp3'},
 ]
 

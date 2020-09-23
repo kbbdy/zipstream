@@ -1,3 +1,8 @@
+0.5
+- fixed DD_MAGIC reversed constant (thanks to arthanson for figurint ghis out)
+- checked library on modern python version (eg. 3.9)
+- fixed existing tests to make them execute properly on new python versions
+
 0.4
 - added 'deflate' compresion method
 

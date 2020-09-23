@@ -69,7 +69,7 @@ class ZipStreamTestCase(FileUsingTestBase, TestCase):
         ])
 
         res = b""
-        with open("/tmp/empty_out.zip","wb") as fo:
+        with open("/tmp/empty_out.zip","wb") as f:
             for f in zs.stream():
                 res+=f
 
