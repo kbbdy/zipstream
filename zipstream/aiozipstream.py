@@ -75,16 +75,35 @@ class AioZipStream(ZipBase):
 
     async def stream(self):
         # stream files
-        for idx, source in enumerate(self._source_of_files):
-            file_struct = self._create_file_struct(source)
-            # file offset in archive
-            file_struct['offset'] = self._offset_get()
-            self._add_file_to_cdir(file_struct)
-            # file data
-            async for chunk in self._stream_single_file(file_struct):
-                self._offset_add(len(chunk))
-                yield chunk
+        try:
+            iter(self._source_of_files)
+        except TypeError:
+            async for chunck in  self.stream_async_fileslist():
+                yield chunck
+                return
+        for source in (self._source_of_files):
+            async for chunck in  self.stream_file(source):
+                yield chunck
+
         # stream zip structures
         for chunk in self._make_end_structures():
             yield chunk
         self._cleanup()
+
+    async def stream_file(self, source):
+        file_struct = self._create_file_struct(source)
+        # file offset in archive
+        file_struct['offset'] = self._offset_get()
+        self._add_file_to_cdir(file_struct)
+        # file data
+        async for chunk in self._stream_single_file(file_struct):
+            self._offset_add(len(chunk))
+            yield chunk
+
+    async def stream_async_fileslist(self):
+
+        if not hasattr(self._source_of_files,"__anext__"):
+            raise TypeError("Files list is not iterable nor async Generator")
+        async for source in self._source_of_files:
+            async for chunck in self.stream_file(source):
+                yield chunck
