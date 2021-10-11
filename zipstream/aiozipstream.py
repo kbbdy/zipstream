@@ -74,23 +74,29 @@ class AioZipStream(ZipBase):
         yield self._make_data_descriptor(file_struct, *pcs.state())
 
     async def stream(self):
-        # stream files
-        try:
-            iter(self._source_of_files)
-        except TypeError:
-            async for chunck in  self.stream_async_fileslist():
+        # stream files from iterabel or async generator
+        if  hasattr(self._source_of_files, "__anext__"):
+            async for chunck in  self._stream_async_gen_fileslist():
                 yield chunck
-                return
-        for source in (self._source_of_files):
-            async for chunck in  self.stream_file(source):
+            return
+        else:
+            async for chunck in self._stream_iterable_fileslist():
                 yield chunck
 
+    async def _stream_iterable_fileslist(self):
+        """
+        stream from _source_of_files if it is not an async generator
+        """
+        for source in (self._source_of_files):
+            async for chunck in self._stream_file_and_local_headers(source):
+                yield chunck
         # stream zip structures
         for chunk in self._make_end_structures():
             yield chunk
         self._cleanup()
 
-    async def stream_file(self, source):
+    async def _stream_file_and_local_headers(self, source):
+
         file_struct = self._create_file_struct(source)
         # file offset in archive
         file_struct['offset'] = self._offset_get()
@@ -100,10 +106,14 @@ class AioZipStream(ZipBase):
             self._offset_add(len(chunk))
             yield chunk
 
-    async def stream_async_fileslist(self):
-
-        if not hasattr(self._source_of_files,"__anext__"):
-            raise TypeError("Files list is not iterable nor async Generator")
+    async def _stream_async_gen_fileslist(self):
+        """
+        stream files from _source_of_files if it is an async generator
+        """
         async for source in self._source_of_files:
-            async for chunck in self.stream_file(source):
+            async for chunck in self._stream_file_and_local_headers(source):
                 yield chunck
+
+        for chunk in self._make_end_structures():
+            yield chunk
+        self._cleanup()

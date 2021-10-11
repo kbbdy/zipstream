@@ -1,9 +1,11 @@
-import pytest
+import io
 
+import pytest
+import zlib
 pytestmark = pytest.mark.asyncio
 import zipstream
 from tests.test_zipstream import ZipStreamTestCase
-
+import zipfile
 
 async def asyncfileslist():
     with open("/tmp/_tempik_1.txt", "w") as f:
@@ -22,7 +24,7 @@ def  syncfileslist():
     yield {"file": "/tmp/_tempik_1.txt"}
     yield {"file": "/tmp/_tempik_2.txt"}
 
-
+FILENAMES=set(fd["file"].split("/")[-1] for fd in syncfileslist())
 
 async def test_async_generator_for_files():
     gen=asyncfileslist()
@@ -42,3 +44,9 @@ async def zipgen(gen):
 
     async for f in zs.stream():
         res += f
+    zf=zipfile.ZipFile(io.BytesIO(res))
+    filenames=set(zipinfo.filename for zipinfo  in zf.filelist)
+    assert not  filenames.difference(FILENAMES)
+
+
+
