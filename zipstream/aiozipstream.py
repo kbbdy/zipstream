@@ -47,9 +47,14 @@ class AioZipStream(ZipBase):
 
     async def data_generator(self, src, src_type):
         if src_type == 's':
-            async for chunk in src:
-                yield chunk
-            return
+            if hasattr(src,"__anext__",):
+                async for chunk in src:
+                    yield chunk
+                return
+            else:
+                for chunk in src:
+                    yield chunk
+                return
         if src_type == 'f':
             async with aiofiles.open(src, "rb") as fh:
                 while True:
