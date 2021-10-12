@@ -140,6 +140,23 @@ loop.run_until_complete(zip_async('example.zip', files))
 loop.stop()
 ```
 
+The List of files may also be an async generator:
+```python
+async def  files():
+    yield {
+              'file': '/tmp/car.jpeg'
+          },
+    yield {
+              'file': '/tmp/aaa.mp3', 
+              'name': 'music.mp3'
+          },
+    yield {
+        'stream': content_generator(),
+        'name': 'random_stuff.txt'
+           }
+ 
+```
+
 ## Examples
 
 See `examples` directory for complete code and working examples of ZipStream and AioZipStream.

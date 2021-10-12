@@ -3,7 +3,9 @@ import pytest
 import zipstream
 import zipfile
 import aiofiles
+
 pytestmark = pytest.mark.asyncio
+
 
 async def asyncfileslist():
     with open("/tmp/_tempik_1.txt", "w") as f:
@@ -14,7 +16,7 @@ async def asyncfileslist():
     yield {"file": "/tmp/_tempik_2.txt"}
 
 
-def  syncfileslist():
+def syncfileslist():
     with open("/tmp/_tempik_1.txt", "w") as f:
         f.write("foo baz bar")
     with open("/tmp/_tempik_2.txt", "w") as f:
@@ -22,54 +24,61 @@ def  syncfileslist():
     yield {"file": "/tmp/_tempik_1.txt"}
     yield {"file": "/tmp/_tempik_2.txt"}
 
+
 async def asyncfileslist_streams():
     with open("/tmp/_tempik_1.txt", "w") as f:
         f.write("foo baz bar")
     with open("/tmp/_tempik_2.txt", "w") as f:
         f.write("baz trololo something")
-    async with aiofiles.open("/tmp/_tempik_1.txt","rb") as f:
-        yield {"stream":f ,
-                         "name": "_tempik_1.txt"
-               }
-    async with aiofiles.open("/tmp/_tempik_2.txt","rb") as f:
-        yield {"stream": f,
-               "name": "_tempik_2.txt"
-               }
+    async with aiofiles.open("/tmp/_tempik_1.txt", "rb") as f:
+        yield {
+            "stream": f,
+            "name": "_tempik_1.txt"
+        }
+    async with aiofiles.open("/tmp/_tempik_2.txt", "rb") as f:
+        yield {
+            "stream": f,
+            "name": "_tempik_2.txt"
+        }
 
 
-async def asyncfileslist_stream_iter ():
+async def asyncfileslist_stream_iter():
     with open("/tmp/_tempik_1.txt", "w") as f:
         f.write("foo baz bar")
     with open("/tmp/_tempik_2.txt", "w") as f:
         f.write("baz trololo something")
-    with open("/tmp/_tempik_1.txt","rb") as f:
-        yield {"stream":f ,
-                         "name": "_tempik_1.txt"
+    with open("/tmp/_tempik_1.txt", "rb") as f:
+        yield {"stream": f,
+               "name": "_tempik_1.txt"
                }
-    with open("/tmp/_tempik_2.txt","rb") as f:
+    with open("/tmp/_tempik_2.txt", "rb") as f:
         yield {"stream": f,
                "name": "_tempik_2.txt"
                }
 
 
 async def test_async_generator_for_files():
-    gen=asyncfileslist()
+    gen = asyncfileslist()
     await zip_gen_and_check(gen)
 
-async  def   test_sync_generator_for_files():
-    gen=syncfileslist()
+
+async def test_sync_generator_for_files():
+    gen = syncfileslist()
     await zip_gen_and_check(gen)
 
-async  def   test_sync_list_for_files():
-    gen=list(syncfileslist())
+
+async def test_sync_list_for_files():
+    gen = list(syncfileslist())
     await zip_gen_and_check(gen)
 
-async  def  test_async_list_for_async_get():
-    gen=asyncfileslist_streams()
+
+async def test_async_list_for_async_get():
+    gen = asyncfileslist_streams()
     await zip_gen_and_check(gen)
 
-async  def  test_async_list_for_iter():
-    gen=asyncfileslist_stream_iter()
+
+async def test_async_list_for_iter():
+    gen = asyncfileslist_stream_iter()
     await zip_gen_and_check(gen)
 
 
@@ -80,9 +89,6 @@ async def zip_gen_and_check(gen):
 
     async for f in zs.stream():
         res += f
-    zf=zipfile.ZipFile(io.BytesIO(res))
-    filenames=set(zipinfo.filename for zipinfo  in zf.filelist)
-    assert not  filenames.difference(FILENAMES)
-
-
-
+    zf = zipfile.ZipFile(io.BytesIO(res))
+    filenames = set(zipinfo.filename for zipinfo in zf.filelist)
+    assert not filenames.difference(FILENAMES)
