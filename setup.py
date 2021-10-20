@@ -12,7 +12,7 @@ with open(os.path.join(here, 'README.md'), encoding='utf-8') as f:
 
 setup(
     name='zipstream',
-    version='0.5',
+    version='0.5.1',
 
     description='Creating zip files on the fly',
     long_description=long_description,

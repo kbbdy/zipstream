@@ -47,9 +47,14 @@ class AioZipStream(ZipBase):
 
     async def data_generator(self, src, src_type):
         if src_type == 's':
-            async for chunk in src:
-                yield chunk
-            return
+            if hasattr(src,"__anext__",):
+                async for chunk in src:
+                    yield chunk
+                return
+            else:
+                for chunk in src:
+                    yield chunk
+                return
         if src_type == 'f':
             async with aiofiles.open(src, "rb") as fh:
                 while True:
@@ -74,17 +79,46 @@ class AioZipStream(ZipBase):
         yield self._make_data_descriptor(file_struct, *pcs.state())
 
     async def stream(self):
-        # stream files
-        for idx, source in enumerate(self._source_of_files):
-            file_struct = self._create_file_struct(source)
-            # file offset in archive
-            file_struct['offset'] = self._offset_get()
-            self._add_file_to_cdir(file_struct)
-            # file data
-            async for chunk in self._stream_single_file(file_struct):
-                self._offset_add(len(chunk))
-                yield chunk
+        # stream files from iterabel or async generator
+        if  hasattr(self._source_of_files, "__anext__"):
+            async for chunck in  self._stream_async_gen_fileslist():
+                yield chunck
+            return
+        else:
+            async for chunck in self._stream_iterable_fileslist():
+                yield chunck
+
+    async def _stream_iterable_fileslist(self):
+        """
+        stream from _source_of_files if it is not an async generator
+        """
+        for source in (self._source_of_files):
+            async for chunck in self._stream_file_and_local_headers(source):
+                yield chunck
         # stream zip structures
+        for chunk in self._make_end_structures():
+            yield chunk
+        self._cleanup()
+
+    async def _stream_file_and_local_headers(self, source):
+
+        file_struct = self._create_file_struct(source)
+        # file offset in archive
+        file_struct['offset'] = self._offset_get()
+        self._add_file_to_cdir(file_struct)
+        # file data
+        async for chunk in self._stream_single_file(file_struct):
+            self._offset_add(len(chunk))
+            yield chunk
+
+    async def _stream_async_gen_fileslist(self):
+        """
+        stream files from _source_of_files if it is an async generator
+        """
+        async for source in self._source_of_files:
+            async for chunck in self._stream_file_and_local_headers(source):
+                yield chunck
+
         for chunk in self._make_end_structures():
             yield chunk
         self._cleanup()

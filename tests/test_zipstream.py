@@ -74,44 +74,40 @@ class ZipStreamTestCase(FileUsingTestBase, TestCase):
                 res+=f
 
         # check header
-        self.assertEqual( res[:4], zipfile.stringFileHeader )
-        self.assertEqual( res[4:6], b"\x14\x00" )    # version
-        self.assertEqual( res[6:8], b"\x08\x00" )    # flags
-        self.assertEqual( res[8:10], b"\x00\x00" )   # compression method
-        self.assertEqual( res[14:18], b"\x00\x00\x00\x00" ) # crc is set to 0
-        self.assertEqual( res[18:22], b"\x00\x00\x00\x00" ) # compressed size is 0
-        self.assertEqual( res[22:26], b"\x00\x00\x00\x00" ) # uncompressed size is 0
+        self.check_result(res)
 
-        pos = res.find( zipstream.consts.LF_MAGIC ,10)
-
+    def check_result(self, res):
+        self.assertEqual(res[:4], zipfile.stringFileHeader)
+        self.assertEqual(res[4:6], b"\x14\x00")  # version
+        self.assertEqual(res[6:8], b"\x08\x00")  # flags
+        self.assertEqual(res[8:10], b"\x00\x00")  # compression method
+        self.assertEqual(res[14:18], b"\x00\x00\x00\x00")  # crc is set to 0
+        self.assertEqual(res[18:22], b"\x00\x00\x00\x00")  # compressed size is 0
+        self.assertEqual(res[22:26], b"\x00\x00\x00\x00")  # uncompressed size is 0
+        pos = res.find(zipstream.consts.LF_MAGIC, 10)
         # data descriptor has 16 bytes
-        dd = res[pos-16:pos]
+        dd = res[pos - 16:pos]
         self.assertEqual(dd[:4], zipstream.consts.DD_MAGIC)
-
         # check CRC
         crc = dd[4:8]
         crc2 = zlib.crc32(b"foo baz bar") & 0xffffffff
-        crc2 = struct.pack(b"<L", crc2 )
-        self.assertEqual( crc, crc2 )
+        crc2 = struct.pack(b"<L", crc2)
+        self.assertEqual(crc, crc2)
         # check file len compressed and uncompressed
-        self.assertEqual( dd[8:12], b"\x0b\x00\x00\x00" )
-        self.assertEqual( dd[12:16], b"\x0b\x00\x00\x00" )
-
+        self.assertEqual(dd[8:12], b"\x0b\x00\x00\x00")
+        self.assertEqual(dd[12:16], b"\x0b\x00\x00\x00")
         # check end file descriptor
-        endstruct  = res[ -zipstream.consts.CD_END_STRUCT.size: ]
-        self.assertEqual( endstruct[:4], zipstream.consts.CD_END_MAGIC )
-        self.assertEqual( endstruct[8:10], b"\x02\x00" ) # two files in disc
-        self.assertEqual( endstruct[10:12], b"\x02\x00" ) # two files total
-
+        endstruct = res[-zipstream.consts.CD_END_STRUCT.size:]
+        self.assertEqual(endstruct[:4], zipstream.consts.CD_END_MAGIC)
+        self.assertEqual(endstruct[8:10], b"\x02\x00")  # two files in disc
+        self.assertEqual(endstruct[10:12], b"\x02\x00")  # two files total
         zdsize = len(res) - zipstream.consts.CD_END_STRUCT.size
         cdsize = struct.unpack("<L", endstruct[12:16])[0]
         cdpos = struct.unpack("<L", endstruct[16:20])[0]
-
         # position of ender is equal of cd + cd size
-        self.assertEqual( cdpos+cdsize, len(res)-zipstream.consts.CD_END_STRUCT.size )
-        self.assertEqual( res[cdpos:cdpos+4], zipstream.consts.CDFH_MAGIC )
-
-        cdentry = res[ cdpos: cdpos+cdsize ]
+        self.assertEqual(cdpos + cdsize, len(res) - zipstream.consts.CD_END_STRUCT.size)
+        self.assertEqual(res[cdpos:cdpos + 4], zipstream.consts.CDFH_MAGIC)
+        cdentry = res[cdpos: cdpos + cdsize]
 
 
 if __name__ == '__main__':
